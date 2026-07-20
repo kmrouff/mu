@@ -1,0 +1,214 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
+import * as Linking from 'expo-linking';
+import { useIdentity } from '../identity/useIdentity';
+import { registerUser, pingContact, setPressingFor, subscribeToPressingFor, subscribeToReceivedPings } from '../firebase/presence';
+import { createConnectCode, redeemConnectCode, subscribeToContacts, RemoteContact } from '../firebase/pairing';
+
+const WELCOME_SEEN_KEY = 'mu.hasSeenWelcome';
+
+// Pulls a connect code out of an incoming deep link. Supports both `mu://connect/XXXXXX` and
+// `mu://connect?code=XXXXXX` (and Expo Go's `exp://host/--/connect/XXXXXX` dev-mode wrapping —
+// `Linking.parse` strips that down to the same {path, queryParams} shape either way).
+function extractInviteCode(url: string): string | null {
+  try {
+    const { path, queryParams } = Linking.parse(url);
+    const fromQuery = queryParams?.code;
+    if (typeof fromQuery === 'string') return fromQuery.toUpperCase();
+    if (path) {
+      const segments = path.split('/').filter(Boolean);
+      const last = segments[segments.length - 1];
+      if (last && last.toLowerCase() !== 'connect') return last.toUpperCase();
+    }
+  } catch {
+    // malformed/unrelated URL — ignore
+  }
+  return null;
+}
+
+export type Contact = { id: string; name: string };
+export type InfoScreen = 'mission' | 'contact' | 'faq' | 'terms' | null;
+
+// README "both" haptic spec: navigator.vibrate([45,65,45,260]) repeating every 1.05s.
+// expo-haptics has no raw vibration-pattern API, so we approximate the buzz-buzz-pause
+// feel with two quick impacts per 1.05s tick instead of a literal pattern replay.
+async function vibrateOnce() {
+  if (Platform.OS === 'web') return;
+  try {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    setTimeout(() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    }, 90);
+  } catch {
+    // haptics unavailable (e.g. simulator) — ignore
+  }
+}
+
+export function useMuState() {
+  const { identity, setName, clearName } = useIdentity();
+  const uid = identity?.uid ?? null;
+
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [youPressing, setYouPressing] = useState(false);
+  const [theirActive, setTheirActive] = useState<Record<string, boolean>>({});
+  const [lastPingAt, setLastPingAt] = useState<Record<string, number>>({});
+  const [lastSeenAt, setLastSeenAt] = useState<Record<string, number>>({});
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showAddOverlay, setShowAddOverlay] = useState(false);
+  const [infoScreen, setInfoScreen] = useState<InfoScreen>(null);
+  const [pendingInviteCode, setPendingInviteCode] = useState<string | null>(null);
+  const [hasSeenWelcome, setHasSeenWelcome] = useState<boolean | null>(null); // null = still loading
+
+  const heartbeatInterval = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const wasBoth = useRef(false);
+  const autoRedeemed = useRef(false);
+
+  const both = !!selectedId && youPressing && !!theirActive[selectedId];
+
+  // One-time "why this app exists" note — check once whether this device has already
+  // dismissed it, so it never shows again after the first time.
+  useEffect(() => {
+    AsyncStorage.getItem(WELCOME_SEEN_KEY).then((v) => setHasSeenWelcome(v === 'true'));
+  }, []);
+
+  // Catch an invite code from a deep link — whether the app was launched fresh via the link
+  // (cold start) or was already open when the link was tapped (warm start).
+  useEffect(() => {
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        const code = extractInviteCode(url);
+        if (code) setPendingInviteCode(code);
+      }
+    });
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      const code = extractInviteCode(url);
+      if (code) setPendingInviteCode(code);
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Once we have both a fresh identity and a pending invite code, redeem it automatically —
+  // by the time someone finishes picking a name, their person should already be there.
+  useEffect(() => {
+    if (!identity || !pendingInviteCode || autoRedeemed.current) return;
+    autoRedeemed.current = true;
+    redeemConnectCode(pendingInviteCode, identity.uid, identity.name).finally(() => {
+      setPendingInviteCode(null);
+    });
+  }, [identity, pendingInviteCode]);
+
+  // Register our name once we have an identity, and keep a live subscription to our real
+  // contacts list (replaces the old hardcoded CONTACTS array).
+  useEffect(() => {
+    if (!identity) return;
+    registerUser(identity.uid, identity.name);
+    const unsub = subscribeToContacts(identity.uid, (list: RemoteContact[]) => {
+      setContacts(list);
+      setSelectedId((current) => current ?? list[0]?.id ?? null);
+    });
+    return unsub;
+  }, [identity]);
+
+  // For every contact, listen to whether *they* are currently pressing towards *us*.
+  useEffect(() => {
+    if (!uid) return;
+    const unsubs = contacts.map((c) =>
+      subscribeToPressingFor(c.id, (pressingForMe) => {
+        setTheirActive((s) => ({ ...s, [c.id]: pressingForMe === uid }));
+      }),
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [uid, contacts]);
+
+  // Real pings received from contacts (each keyed by the sender's uid, which is the contact id).
+  useEffect(() => {
+    if (!uid) return;
+    return subscribeToReceivedPings(uid, (pings) => setLastPingAt(pings ?? {}));
+  }, [uid]);
+
+  const unseen = useMemo(() => {
+    const result: Record<string, boolean> = {};
+    for (const c of contacts) {
+      result[c.id] = (lastPingAt[c.id] ?? 0) > (lastSeenAt[c.id] ?? 0);
+    }
+    return result;
+  }, [contacts, lastPingAt, lastSeenAt]);
+
+  // Haptic heartbeat loop while the mutual "both" state holds.
+  useEffect(() => {
+    if (both && !wasBoth.current) {
+      vibrateOnce();
+      heartbeatInterval.current = setInterval(vibrateOnce, 1050);
+    } else if (!both && wasBoth.current) {
+      clearInterval(heartbeatInterval.current);
+    }
+    wasBoth.current = both;
+    return () => clearInterval(heartbeatInterval.current);
+  }, [both]);
+
+  return {
+    identity,
+    contacts,
+    selectedId,
+    youPressing,
+    theirActive,
+    unseen,
+    lastPingAt,
+    settingsOpen,
+    showAddOverlay,
+    infoScreen,
+    both,
+    loggedIn: !!identity,
+    hasPendingInvite: !!pendingInviteCode,
+    showWelcome: !!identity && hasSeenWelcome === false,
+
+    setName,
+
+    selectContact: (id: string) => {
+      setSelectedId(id);
+      setLastSeenAt((s) => ({ ...s, [id]: Date.now() }));
+    },
+    handlePress: () => {
+      setYouPressing(true);
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      }
+      if (uid && selectedId) {
+        setPressingFor(uid, selectedId);
+        pingContact(uid, selectedId);
+      }
+    },
+    handleRelease: () => {
+      setYouPressing(false);
+      if (uid) setPressingFor(uid, null);
+    },
+    toggleSettings: () => setSettingsOpen((v) => !v),
+    closeSettings: () => setSettingsOpen(false),
+    openAddOverlay: () => setShowAddOverlay(true),
+    closeAddOverlay: () => setShowAddOverlay(false),
+    logout: () => {
+      setSettingsOpen(false);
+      clearName();
+      // TEMPORARY, dev-only convenience so the welcome screen can be re-viewed while testing —
+      // NOT correct for real users (logging out to switch names shouldn't force the intro
+      // again). Remove this before sharing with anyone else; see PROGRESS.md.
+      AsyncStorage.removeItem(WELCOME_SEEN_KEY);
+      setHasSeenWelcome(false);
+    },
+    openInfo: (screen: InfoScreen) => {
+      setSettingsOpen(false);
+      setInfoScreen(screen);
+    },
+    closeInfo: () => setInfoScreen(null),
+    dismissWelcome: () => {
+      AsyncStorage.setItem(WELCOME_SEEN_KEY, 'true');
+      setHasSeenWelcome(true);
+    },
+
+    createShareCode: () => (uid && identity ? createConnectCode(uid, identity.name) : Promise.reject()),
+    redeemCode: (code: string) => (uid && identity ? redeemConnectCode(code, uid, identity.name) : Promise.reject()),
+  };
+}

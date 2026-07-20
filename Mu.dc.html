@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<style>
+  html,body{margin:0;height:100%}
+  @keyframes muBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.014)}}
+  @keyframes muPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+  @keyframes muHeartbeat{0%{transform:scale(1)}16%{transform:scale(1.04)}32%{transform:scale(1.005)}46%{transform:scale(1.04)}70%{transform:scale(1)}100%{transform:scale(1)}}
+  @keyframes muShake{0%,100%{transform:translate(0,0)}10%{transform:translate(0,-0.3px)}20%{transform:translate(0,0.25px)}30%{transform:translate(0,-0.2px)}40%{transform:translate(0,0.2px)}50%{transform:translate(0,0)}100%{transform:translate(0,0)}}
+  @keyframes muDrift{0%,100%{opacity:0.35;transform:translate(-50%,-50%) scale(0.96)}50%{opacity:0.65;transform:translate(-50%,-50%) scale(1.08)}}
+  @keyframes muHueCycle{0%{filter:hue-rotate(0deg)}100%{filter:hue-rotate(360deg)}}
+  @keyframes muHueCycleCore{0%{filter:hue-rotate(0deg) blur(14px)}100%{filter:hue-rotate(360deg) blur(14px)}}
+</style>
+</helmet>
+<div style="min-height:100vh;width:100%;display:flex;align-items:center;justify-content:center;background:oklch(0.93 0.01 75);box-sizing:border-box;padding:24px">
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ false }}" hint-size="402,874">
+  <div style="{{ shellStyle }}" onContextMenu="{{ blockContextMenu }}">
+    <div style="{{ loginLayerStyle }}">
+      <div style="{{ loginBrandWrapStyle }}">
+        <div style="{{ loginOrbOuterStyle }}">
+          <div style="{{ loginOrbCoreStyle }}"></div>
+        </div>
+        <div style="{{ loginLogoStyle }}">mu</div>
+      </div>
+      <div style="{{ loginButtonsWrapStyle }}">
+        <sc-for list="{{ providersVM }}" as="p" hint-placeholder-count="3">
+          <div style="{{ p.style }}" onClick="{{ p.onClick }}">{{ p.label }}</div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="{{ appLayerStyle }}">
+    <div style="{{ headerStyle }}">
+      <div style="{{ wordmarkStyle }}">mu</div>
+      <div style="{{ settingsBtnStyle }}" onClick="{{ toggleSettings }}">
+        <sc-for list="{{ dotsVM }}" as="d" hint-placeholder-count="3">
+          <div style="{{ d.dotStyle }}"></div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="{{ backdropStyle }}" onClick="{{ closeSettings }}"></div>
+    <div style="{{ settingsPanelStyle }}">
+      <div style="{{ settingsItemStyle }}">Mission</div>
+      <div style="{{ settingsItemStyle }}">Contact</div>
+      <div style="{{ settingsItemStyle }}">FAQ</div>
+      <div style="{{ settingsItemStyle }}">T&amp;C</div>
+      <div style="{{ settingsItemLastStyle }}">Log Out</div>
+    </div>
+
+    <div style="{{ mainStyle }}">
+      <div
+        style="{{ orbStyle }}"
+        onPointerDown="{{ handlePress }}"
+        onPointerUp="{{ handleRelease }}"
+        onPointerLeave="{{ handleRelease }}"
+        onPointerCancel="{{ handleRelease }}"
+      >
+        <div style="{{ orbCoreStyle }}"></div>
+      </div>
+      <div style="{{ nameStyle }}">{{ selectedContact.name }}</div>
+    </div>
+
+    <div style="{{ railWrapStyle }}">
+      <sc-for list="{{ contactsVM }}" as="c" hint-placeholder-count="4">
+        <div style="{{ c.itemStyle }}" onClick="{{ c.onSelect }}">
+          <div style="{{ c.orbStyle }}">
+            <div style="{{ c.coreStyle }}"></div>
+            <div style="{{ c.badgeStyle }}"></div>
+          </div>
+          <div style="{{ c.labelStyle }}">{{ c.name }}</div>
+        </div>
+      </sc-for>
+      <div style="{{ addTileStyle }}" onClick="{{ openAddOverlay }}">
+        <div style="{{ addTileOrbStyle }}">
+          <div style="{{ addPlusLine1Style }}"></div>
+          <div style="{{ addPlusLine2Style }}"></div>
+        </div>
+        <div style="{{ addTileLabelStyle }}">Add</div>
+      </div>
+    </div>
+
+    <div style="{{ addOverlayStyle }}">
+      <div style="{{ addOverlayHeaderStyle }}">
+        <div style="{{ addCloseBtnStyle }}" onClick="{{ closeAddOverlay }}">
+          <div style="{{ xLine1Style }}"></div>
+          <div style="{{ xLine2Style }}"></div>
+        </div>
+        <div style="{{ addOverlayTitleStyle }}">Connect with someone</div>
+        <div style="{{ addSubmitBtnStyle }}" onClick="{{ closeAddOverlay }}">
+          <div style="{{ checkStyle }}"></div>
+        </div>
+      </div>
+      <div style="{{ addOverlayBodyStyle }}">
+        <input style="{{ addSearchInputStyle }}" placeholder="Name, email, username, or phone">
+        <div style="{{ addDividerStyle }}">
+          <div style="{{ addDividerLineStyle }}"></div>
+          <div style="{{ addDividerTextStyle }}">or</div>
+          <div style="{{ addDividerLineStyle }}"></div>
+        </div>
+        <div style="{{ addShareBtnStyle }}">Share connection link</div>
+      </div>
+    </div>
+    </div>
+  </div>
+</x-import>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const CONTACTS = [
+  { id: 'alex', name: 'Alex' },
+  { id: 'sam', name: 'Sam' },
+  { id: 'jordan', name: 'Jordan' },
+  { id: 'robin', name: 'Robin' },
+];
+
+const THEME = {
+  idle:      { mid: 'oklch(0.87 0.045 258)', lo: 'oklch(0.79 0.04 258)', glow: 'oklch(0.87 0.05 258 / 0.22)', core: 'oklch(0.96 0.025 258 / 0.4)' },
+  sending:   { mid: 'oklch(0.92 0.09 95)',   lo: 'oklch(0.85 0.09 92)',  glow: 'oklch(0.92 0.11 95 / 0.28)',  core: 'oklch(0.97 0.07 96 / 0.45)' },
+  receiving: { mid: 'oklch(0.85 0.11 148)',  lo: 'oklch(0.72 0.11 148)', glow: 'oklch(0.85 0.14 148 / 0.34)', core: 'oklch(0.95 0.09 150 / 0.5)' },
+  both:      { mid: 'oklch(0.84 0.09 22)',   lo: 'oklch(0.73 0.09 20)',  glow: 'oklch(0.86 0.11 22 / 0.3)',   core: 'oklch(0.96 0.07 24 / 0.48)' },
+};
+
+const ANIM = { idle: 'muBreathe 4.2s ease-in-out infinite', sending: 'muPulse 1.05s ease-in-out infinite', receiving: 'muPulse 1.05s ease-in-out infinite', both: 'muHeartbeat 1.05s ease-in-out infinite' };
+
+class Component extends DCLogic {
+  state = {
+    contacts: CONTACTS,
+    selectedId: 'alex',
+    youPressing: false,
+    theirActive: { alex: false, sam: false, jordan: false, robin: false },
+    unseen: { alex: false, sam: false, jordan: false, robin: false },
+    settingsOpen: false,
+    showAddOverlay: false,
+    loggedIn: false,
+  };
+
+  componentDidMount() {
+    this.scheduleIncoming();
+  }
+
+  componentWillUnmount() {
+    clearTimeout(this._incomingTimer);
+    clearTimeout(this._incomingOffTimer);
+    clearInterval(this._heartbeatInterval);
+  }
+
+  _lastBoth = false;
+
+  componentDidUpdate() {
+    const nowBoth = this.state.youPressing && !!this.state.theirActive[this.state.selectedId];
+    if (nowBoth && !this._lastBoth) this.startHeartbeat();
+    else if (!nowBoth && this._lastBoth) this.stopHeartbeat();
+    this._lastBoth = nowBoth;
+  }
+
+  scheduleIncoming() {
+    const delay = 3200 + Math.random() * 5200;
+    this._incomingTimer = setTimeout(() => {
+      const ids = this.state.contacts.map(c => c.id);
+      const id = ids[Math.floor(Math.random() * ids.length)];
+      this.setState(s => ({ theirActive: { ...s.theirActive, [id]: true }, unseen: { ...s.unseen, [id]: true } }));
+      this._incomingOffTimer = setTimeout(() => {
+        this.setState(s => ({ theirActive: { ...s.theirActive, [id]: false } }));
+      }, 2200 + Math.random() * 1600);
+      this.scheduleIncoming();
+    }, delay);
+  }
+
+  vibrateOnce() {
+    try { navigator.vibrate && navigator.vibrate([45, 65, 45, 260]); } catch (e) {}
+  }
+
+  startHeartbeat() {
+    this.vibrateOnce();
+    this._heartbeatInterval = setInterval(() => this.vibrateOnce(), 1050);
+  }
+
+  stopHeartbeat() {
+    clearInterval(this._heartbeatInterval);
+    this._heartbeatInterval = null;
+  }
+
+  orbLook(state, size, ring) {
+    const t = THEME[state];
+    return {
+      outer: {
+        width: size, height: size, borderRadius: '50%', position: 'relative',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        cursor: 'pointer', touchAction: 'manipulation', userSelect: 'none',
+        WebkitUserSelect: 'none', WebkitTapHighlightColor: 'transparent', WebkitTouchCallout: 'none',
+        background: `radial-gradient(circle at 50% 50%, ${t.mid} 0%, ${t.lo} 38%, transparent 72%)`,
+        boxShadow: `${ring ? `0 0 0 1.5px ${t.glow}, ` : ''}0 0 ${size * 0.6}px ${size * 0.2}px ${t.glow}`,
+        filter: `blur(${size * 0.015}px)`,
+        transition: 'background .8s ease, box-shadow .8s ease',
+        animation: ANIM[state],
+      },
+      core: {
+        position: 'absolute', width: '60%', height: '60%', top: '50%', left: '50%',
+        borderRadius: '50%', pointerEvents: 'none',
+        background: `radial-gradient(circle, ${t.core} 0%, transparent 68%)`,
+        filter: `blur(${size * 0.16}px)`,
+        transition: 'background .8s ease',
+        animation: 'muDrift 6s ease-in-out infinite',
+      },
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const selectedContact = s.contacts.find(c => c.id === s.selectedId);
+    const both = s.youPressing && !!s.theirActive[s.selectedId];
+    const mainState = both ? 'both' : s.youPressing ? 'sending' : s.theirActive[s.selectedId] ? 'receiving' : 'idle';
+    const mainLook = this.orbLook(mainState, 232, false);
+
+    const dotsVM = [0, 1, 2].map(i => ({
+      id: i,
+      dotStyle: { width: 4.5, height: 4.5, borderRadius: '50%', background: 'oklch(0.4 0.015 60 / 0.75)' },
+    }));
+
+    const contactsVM = s.contacts.map(c => {
+      const isSelected = c.id === s.selectedId;
+      const cBoth = isSelected && both;
+      const cState = cBoth ? 'both' : (isSelected && s.youPressing) ? 'sending' : s.theirActive[c.id] ? 'receiving' : 'idle';
+      const cLook = this.orbLook(cState, 50, isSelected);
+      const hasUnseen = !!s.unseen[c.id];
+      return {
+        id: c.id,
+        name: c.name,
+        onSelect: () => this.setState(st => ({ selectedId: c.id, unseen: { ...st.unseen, [c.id]: false } })),
+        itemStyle: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, flexShrink: 0, width: 64, cursor: 'pointer', scrollSnapAlign: 'center' },
+        orbStyle: cLook.outer,
+        coreStyle: cLook.core,
+        badgeStyle: {
+          position: 'absolute', top: -1, right: 2, width: 12, height: 12, borderRadius: '50%',
+          background: 'oklch(0.8 0.15 22)', border: '2px solid oklch(0.97 0.008 75)',
+          boxShadow: '0 2px 6px oklch(0.8 0.15 22 / 0.4)',
+          opacity: hasUnseen ? 1 : 0, transform: hasUnseen ? 'scale(1)' : 'scale(0)',
+          transition: 'transform .3s cubic-bezier(.34,1.56,.64,1), opacity .2s ease', pointerEvents: 'none',
+        },
+        labelStyle: { fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: isSelected ? 'oklch(0.3 0.012 60)' : 'oklch(0.62 0.01 60)', textAlign: 'center', fontFamily: '-apple-system, system-ui', fontWeight: isSelected ? 600 : 500 },
+      };
+    });
+
+    return {
+      shellStyle: {
+        position: 'relative', height: '100%', boxSizing: 'border-box', overflow: 'hidden',
+        background: 'oklch(0.97 0.008 75)',
+        animation: mainState === 'both' ? 'muShake 1.05s ease-in-out infinite' : undefined,
+      },
+      loginLayerStyle: {
+        position: 'absolute', inset: 0, boxSizing: 'border-box', display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 56, padding: '0 32px',
+        opacity: s.loggedIn ? 0 : 1, pointerEvents: s.loggedIn ? 'none' : 'auto', transition: 'opacity .6s ease',
+      },
+      loginBrandWrapStyle: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 18 },
+      loginOrbOuterStyle: {
+        width: 96, height: 96, borderRadius: '50%', position: 'relative',
+        background: 'radial-gradient(circle at 50% 50%, oklch(0.86 0.05 258) 0%, oklch(0.77 0.045 258) 40%, transparent 74%)',
+        boxShadow: '0 0 55px 16px oklch(0.86 0.06 258 / 0.28)',
+        animation: 'muBreathe 4.2s ease-in-out infinite, muHueCycle 10s linear infinite',
+      },
+      loginOrbCoreStyle: {
+        position: 'absolute', width: '60%', height: '60%', top: '50%', left: '50%', borderRadius: '50%',
+        background: 'radial-gradient(circle, oklch(0.96 0.03 258 / 0.45) 0%, transparent 68%)',
+        animation: 'muDrift 6s ease-in-out infinite, muHueCycleCore 10s linear infinite',
+      },
+      loginLogoStyle: { fontSize: 44, fontWeight: 600, letterSpacing: '-0.02em', color: 'oklch(0.32 0.012 60)', fontFamily: '-apple-system, system-ui' },
+      loginButtonsWrapStyle: { display: 'flex', flexDirection: 'column', gap: 12, width: '100%' },
+      providersVM: ['Google', 'Apple', 'Email'].map(name => ({
+        id: name,
+        label: `Continue with ${name}`,
+        onClick: () => this.setState({ loggedIn: true }),
+        style: {
+          width: '100%', boxSizing: 'border-box', padding: '15px 20px', borderRadius: 999,
+          background: 'oklch(0.99 0.006 75)', boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)',
+          textAlign: 'center', fontSize: 15.5, fontWeight: 500, color: 'oklch(0.3 0.012 60)',
+          cursor: 'pointer', fontFamily: '-apple-system, system-ui',
+        },
+      })),
+      appLayerStyle: {
+        position: 'absolute', inset: 0, boxSizing: 'border-box', display: 'flex', flexDirection: 'column',
+        paddingTop: 62, paddingBottom: 24,
+        opacity: s.loggedIn ? 1 : 0, pointerEvents: s.loggedIn ? 'auto' : 'none', transition: 'opacity .6s ease',
+      },
+      headerStyle: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 22px' },
+      wordmarkStyle: { fontSize: 21, fontWeight: 600, letterSpacing: '-0.02em', color: 'oklch(0.32 0.012 60)', fontFamily: '-apple-system, system-ui' },
+      settingsBtnStyle: { width: 40, height: 40, display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3.5, cursor: 'pointer' },
+      dotsVM,
+      settingsOpen: s.settingsOpen,
+      toggleSettings: () => this.setState(st => ({ settingsOpen: !st.settingsOpen })),
+      closeSettings: () => this.setState({ settingsOpen: false }),
+      backdropStyle: {
+        position: 'absolute', inset: 0, zIndex: 20,
+        background: 'oklch(0.15 0.01 60 / 0.28)',
+        opacity: s.settingsOpen ? 1 : 0,
+        pointerEvents: s.settingsOpen ? 'auto' : 'none',
+        transition: 'opacity .35s ease',
+      },
+      settingsPanelStyle: {
+        position: 'absolute', top: 0, bottom: 0, right: 0, width: 216, boxSizing: 'border-box',
+        background: 'oklch(0.99 0.006 75)', padding: '70px 0 24px', boxShadow: '-8px 0 32px rgba(0,0,0,0.12)',
+        borderLeft: '1px solid oklch(0 0 0 / 0.05)', zIndex: 25,
+        transform: s.settingsOpen ? 'translateX(0)' : 'translateX(100%)',
+        transition: 'transform .38s cubic-bezier(.32,.72,0,1)',
+      },
+      settingsItemStyle: { padding: '13px 24px', fontSize: 15, color: 'oklch(0.32 0.012 60)', opacity: 0.35, pointerEvents: 'none', borderBottom: '1px solid oklch(0 0 0 / 0.05)', fontFamily: '-apple-system, system-ui' },
+      settingsItemLastStyle: { padding: '13px 24px', fontSize: 15, color: 'oklch(0.6 0.09 22)', opacity: 0.35, pointerEvents: 'none', fontFamily: '-apple-system, system-ui' },
+      mainStyle: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 40 },
+      orbStyle: mainLook.outer,
+      orbCoreStyle: mainLook.core,
+      nameStyle: { fontSize: 17, fontWeight: 500, letterSpacing: '0.01em', color: 'oklch(0.52 0.012 60)', fontFamily: '-apple-system, system-ui' },
+      selectedContact,
+      railWrapStyle: {
+        display: 'flex', gap: 18, overflowX: 'auto', padding: '34px 22px 22px', scrollbarWidth: 'none',
+        WebkitOverflowScrolling: 'touch', scrollSnapType: 'x proximity',
+        maskImage: 'linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
+        WebkitMaskImage: 'linear-gradient(to right, transparent 0, black 24px, black calc(100% - 24px), transparent 100%)',
+      },
+      contactsVM,
+      addTileStyle: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, flexShrink: 0, width: 64, cursor: 'pointer', scrollSnapAlign: 'center' },
+      addTileOrbStyle: {
+        width: 50, height: 50, borderRadius: '50%', position: 'relative',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'radial-gradient(circle at 50% 50%, oklch(0.92 0.006 60) 0%, oklch(0.86 0.006 60) 40%, transparent 72%)',
+        boxShadow: '0 0 16px 3px oklch(0.85 0.008 60 / 0.16)',
+      },
+      addPlusLine1Style: { position: 'absolute', width: 11, height: 1.3, background: 'oklch(0.6 0.008 60 / 0.55)', borderRadius: 1 },
+      addPlusLine2Style: { position: 'absolute', width: 1.3, height: 11, background: 'oklch(0.6 0.008 60 / 0.55)', borderRadius: 1 },
+      addTileLabelStyle: { fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'oklch(0.62 0.01 60)', textAlign: 'center', fontFamily: '-apple-system, system-ui', fontWeight: 500 },
+      openAddOverlay: () => this.setState({ showAddOverlay: true }),
+      closeAddOverlay: () => this.setState({ showAddOverlay: false }),
+      addOverlayStyle: {
+        position: 'absolute', inset: 0, zIndex: 40, boxSizing: 'border-box',
+        background: 'oklch(0.98 0.006 75 / 0.98)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+        display: 'flex', flexDirection: 'column', padding: '70px 24px 32px',
+        transform: s.showAddOverlay ? 'translateY(0)' : 'translateY(100%)',
+        opacity: s.showAddOverlay ? 1 : 0, pointerEvents: s.showAddOverlay ? 'auto' : 'none',
+        transition: 'transform .4s cubic-bezier(.32,.72,0,1), opacity .3s ease',
+      },
+      addOverlayHeaderStyle: { display: 'grid', gridTemplateColumns: '36px 1fr 36px', alignItems: 'center', gap: 8 },
+      addOverlayBodyStyle: { flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 28, paddingBottom: '10%' },
+      addCloseBtnStyle: { width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' },
+      xLine1Style: { position: 'absolute', width: 15, height: 1.6, background: 'oklch(0.4 0.012 60)', borderRadius: 1, transform: 'rotate(45deg)' },
+      xLine2Style: { position: 'absolute', width: 15, height: 1.6, background: 'oklch(0.4 0.012 60)', borderRadius: 1, transform: 'rotate(-45deg)' },
+      addOverlayTitleStyle: { fontSize: 17, fontWeight: 600, color: 'oklch(0.3 0.012 60)', textAlign: 'center', fontFamily: '-apple-system, system-ui' },
+      addSubmitBtnStyle: { width: 36, height: 36, borderRadius: '50%', background: 'oklch(0.85 0.11 148)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 14px oklch(0.85 0.14 148 / 0.35)' },
+      checkStyle: { width: 12, height: 6, borderLeft: '2px solid white', borderBottom: '2px solid white', transform: 'rotate(-45deg) translate(1px,-1px)' },
+      addSearchInputStyle: { width: '100%', boxSizing: 'border-box', padding: '15px 18px', borderRadius: 18, border: '1px solid oklch(0 0 0 / 0.08)', background: 'oklch(1 0 0 / 0.6)', fontSize: 15, color: 'oklch(0.3 0.012 60)', fontFamily: '-apple-system, system-ui', outline: 'none' },
+      addDividerStyle: { display: 'flex', alignItems: 'center', gap: 12 },
+      addDividerLineStyle: { flex: 1, height: 1, background: 'oklch(0 0 0 / 0.08)' },
+      addDividerTextStyle: { fontSize: 12.5, color: 'oklch(0.55 0.01 60)', fontFamily: '-apple-system, system-ui', textTransform: 'uppercase', letterSpacing: '0.05em' },
+      addShareBtnStyle: { padding: '15px 18px', borderRadius: 18, background: 'oklch(0.97 0.008 75)', border: '1px solid oklch(0 0 0 / 0.06)', fontSize: 15, color: 'oklch(0.32 0.012 60)', textAlign: 'center', cursor: 'pointer', fontFamily: '-apple-system, system-ui', fontWeight: 500 },
+      handlePress: () => this.setState({ youPressing: true }),
+      handleRelease: () => this.setState({ youPressing: false }),
+      blockContextMenu: (e) => e.preventDefault(),
+    };
+  }
+}
+
+</script>
+</body>
+</html>
