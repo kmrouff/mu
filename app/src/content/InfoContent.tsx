@@ -2,7 +2,7 @@ import React from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, type } from '../theme/tokens';
 
-const FEEDBACK_SLACK_URL = 'https://join.slack.com/t/mu-jwf5271/shared_invite/zt-44julrws0-h2gHgmoBFvTdr4pOX6bTuQ';
+const CONTACT_EMAIL = 'kevinrouff@gmail.com';
 
 export function MissionContent() {
   return (
@@ -95,10 +95,14 @@ export function ContactContent() {
     <View>
       <Text style={styles.paragraph}>
         mu is made by one person, not a company. If something's broken, weird, or you just want
-        to say hi — there's a small Slack channel for that.
+        to say hi — email's the fastest way to reach me.
       </Text>
-      <Pressable style={styles.contactBtn} onPress={() => Linking.openURL(FEEDBACK_SLACK_URL)}>
-        <Text style={styles.contactBtnText}>Join the feedback channel</Text>
+      <Text style={styles.email}>{CONTACT_EMAIL}</Text>
+      <Pressable
+        style={styles.emailBtn}
+        onPress={() => Linking.openURL(`mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Hey from mu')}`)}
+      >
+        <Text style={styles.emailBtnText}>Email me</Text>
       </Pressable>
     </View>
   );
@@ -140,7 +144,13 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: colors.textPrimary,
   },
-  contactBtn: {
+  email: {
+    fontSize: type.body,
+    fontWeight: '600',
+    color: colors.titleText,
+    marginBottom: 20,
+  },
+  emailBtn: {
     alignSelf: 'flex-start',
     paddingVertical: 13,
     paddingHorizontal: 22,
@@ -151,7 +161,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
   },
-  contactBtnText: {
+  emailBtnText: {
     fontSize: type.buttonText,
     fontWeight: '500',
     color: colors.titleText,
