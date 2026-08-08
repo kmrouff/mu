@@ -29,6 +29,26 @@
       body {
         overscroll-behavior: none;
       }
+      /* Without this, pressing and holding the orb or a contact's name (an ordinary press
+         gesture in this app) gets interpreted by the browser as a text-selection drag or,
+         on iOS Safari, the long-press "callout" menu (Copy / Look Up) — the two visibly
+         fight with the app's own press animation and read as wild flickering, and can
+         leave a name stuck highlighted after release. mu is meant to feel like an app,
+         not a page of selectable text, so turn this off everywhere except real inputs. */
+      #root * {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      #root input,
+      #root textarea {
+        -webkit-user-select: text;
+        user-select: text;
+      }
+      /* Removes the grey/blue tap-highlight flash mobile browsers draw on every tap. */
+      * {
+        -webkit-tap-highlight-color: transparent;
+      }
     </style>
   </head>
 
