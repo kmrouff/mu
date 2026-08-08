@@ -1,0 +1,60 @@
+{
+  "rules": {
+    "users": {
+      ".read": false,
+      ".write": false,
+
+      "$uid": {
+        ".read": false,
+        ".write": false,
+
+        "name": {
+          ".write": true,
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
+        },
+
+        "pressingFor": {
+          ".read": true,
+          ".write": true,
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 64)"
+        },
+
+        "contacts": {
+          ".read": true,
+          "$contactUid": {
+            ".write": true,
+            ".validate": "!newData.exists() || newData.hasChildren(['name', 'addedAt'])",
+            "name": { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "addedAt": { ".validate": "newData.isNumber()" },
+            "$other": { ".validate": false }
+          }
+        },
+
+        "receivedPings": {
+          ".read": true,
+          "$senderUid": {
+            ".write": true,
+            ".validate": "!newData.exists() || newData.isNumber()"
+          }
+        },
+
+        "$other": { ".validate": false }
+      }
+    },
+
+    "connectCodes": {
+      ".read": false,
+      ".write": false,
+
+      "$code": {
+        ".read": true,
+        ".write": true,
+        ".validate": "!newData.exists() || newData.hasChildren(['uid', 'name', 'expiresAt'])",
+        "uid": { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "name": { ".validate": "newData.isString() && newData.val().length <= 40" },
+        "expiresAt": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}

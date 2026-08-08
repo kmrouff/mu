@@ -225,13 +225,10 @@ export function useMuState() {
     openAddOverlay: () => setShowAddOverlay(true),
     closeAddOverlay: () => setShowAddOverlay(false),
     logout: () => {
+      // Deliberately leaves the "seen the welcome screen" flag alone: logging out to change
+      // your name shouldn't replay the intro.
       setSettingsOpen(false);
       clearName();
-      // TEMPORARY, dev-only convenience so the welcome screen can be re-viewed while testing —
-      // NOT correct for real users (logging out to switch names shouldn't force the intro
-      // again). Remove this before sharing with anyone else; see PROGRESS.md.
-      AsyncStorage.removeItem(WELCOME_SEEN_KEY);
-      setHasSeenWelcome(false);
     },
     openInfo: (screen: InfoScreen) => {
       setSettingsOpen(false);
