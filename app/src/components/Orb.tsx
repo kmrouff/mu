@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
+  runOnJS,
   useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
@@ -12,38 +13,19 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
 import { CrossfadeGradientCircle, GradientLook } from './CrossfadeGradientCircle';
+import { mixOklch, parseRGBA, RGBA, toRgbaString } from '../theme/colorMix';
 import { motion, orbTheme, OrbState } from '../theme/tokens';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const STATES: OrbState[] = ['idle', 'sending', 'receiving', 'both'];
 
-// Enough intermediate steps that any single blend-step is between two RGB-close colors —
-// alpha-compositing two *similar* colors crossfades cleanly, but compositing two very
-// different ones (e.g. blue over yellow) visibly desaturates toward grey partway through.
-// This is what made idle->receiving flash grey instead of going straight blue->green.
+// Sample points along the OKLCH path between the two state colours. The crossfade blends
+// linearly between consecutive samples, so this only needs to be fine enough that the straight
+// chord between neighbours hugs the curve — 6 is plenty for the hue distances involved here.
 const TRANSITION_STEPS = 6;
 
-type RGBA = [number, number, number, number];
-
-function parseRGBA(c: string): RGBA {
-  if (c.startsWith('#')) {
-    return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16), 1];
-  }
-  const parts = c
-    .slice(c.indexOf('(') + 1, c.indexOf(')'))
-    .split(',')
-    .map((s) => parseFloat(s.trim()));
-  return [parts[0], parts[1], parts[2], parts[3] ?? 1];
-}
-
-function mixRGBA(a: RGBA, b: RGBA, t: number): RGBA {
-  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t];
-}
-
-function toRgbaString([r, g, b, a]: RGBA, alphaOverride?: number): string {
-  return `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${alphaOverride ?? a})`;
-}
+const TRANSITION_MS = 800;
 
 const midRGBA = Object.fromEntries(STATES.map((s) => [s, parseRGBA(orbTheme[s].mid)])) as Record<OrbState, RGBA>;
 const loRGBA = Object.fromEntries(STATES.map((s) => [s, parseRGBA(orbTheme[s].lo)])) as Record<OrbState, RGBA>;
@@ -61,16 +43,16 @@ function buildTransitionLooks(idPrefix: string, from: OrbState, to: OrbState) {
     // respect an rgba() stop-color's own alpha the way a browser does; it rendered fully opaque
     // on-device even though it looked correct in the web preview. stopOpacity is the real,
     // cross-platform-reliable transparency control for a gradient stop.
-    const lo = toRgbaString(mixRGBA(loRGBA[from], loRGBA[to], t));
+    const lo = toRgbaString(mixOklch(loRGBA[from], loRGBA[to], t));
     main.push({
       id: `${idPrefix}-main-${i}`,
       stops: [
-        { offset: '0%', color: toRgbaString(mixRGBA(midRGBA[from], midRGBA[to], t)) },
+        { offset: '0%', color: toRgbaString(mixOklch(midRGBA[from], midRGBA[to], t)) },
         { offset: '38%', color: lo },
         { offset: '72%', color: lo, opacity: 0 },
       ],
     });
-    const glowC = toRgbaString(mixRGBA(glowRGBA[from], glowRGBA[to], t));
+    const glowC = toRgbaString(mixOklch(glowRGBA[from], glowRGBA[to], t));
     glow.push({
       id: `${idPrefix}-glow-${i}`,
       stops: [
@@ -78,7 +60,7 @@ function buildTransitionLooks(idPrefix: string, from: OrbState, to: OrbState) {
         { offset: '55%', color: glowC, opacity: 0 },
       ],
     });
-    const coreC = toRgbaString(mixRGBA(coreRGBA[from], coreRGBA[to], t));
+    const coreC = toRgbaString(mixOklch(coreRGBA[from], coreRGBA[to], t));
     core.push({
       id: `${idPrefix}-core-${i}`,
       stops: [
@@ -106,6 +88,14 @@ export function Orb({ state, size, ring = false }: Props) {
   const coreOpacity = useSharedValue(0.35);
   const coreScale = useSharedValue(0.96);
 
+  // Once a sweep lands, drop the now-invisible "from" layers by collapsing the stack onto a
+  // single colour. The layers underneath the leading edge stay opaque during the sweep, and the
+  // gradients fade out at their rim, so without this the settled orb's faint outer halo would
+  // keep showing a blend of every colour it passed through rather than the state colour itself.
+  const settle = useCallback((landedOn: OrbState) => {
+    if (prevStateRef.current === landedOn) setTransitionFrom(landedOn);
+  }, []);
+
   useEffect(() => {
     const from = prevStateRef.current;
     prevStateRef.current = state;
@@ -113,8 +103,14 @@ export function Orb({ state, size, ring = false }: Props) {
     setTransitionFrom(from);
     setTransitionTo(state);
     progress.value = 0;
-    progress.value = withTiming(TRANSITION_STEPS - 1, { duration: 800, easing: Easing.inOut(Easing.ease) });
-  }, [state]);
+    progress.value = withTiming(
+      TRANSITION_STEPS - 1,
+      { duration: TRANSITION_MS, easing: Easing.inOut(Easing.ease) },
+      (finished) => {
+        if (finished) runOnJS(settle)(state);
+      },
+    );
+  }, [state, settle]);
 
   useEffect(() => {
     cancelAnimation(scale);
@@ -177,17 +173,28 @@ export function Orb({ state, size, ring = false }: Props) {
   const glowSize = size * 2.1;
   const coreSize = size * 0.6;
 
-  // Same direct 2-point interpolation the transition steps above are built from, just
-  // computed live for the ring stroke instead of baked into a static gradient stop.
-  const ringFromGlow = glowRGBA[transitionFrom];
-  const ringToGlow = glowRGBA[transitionTo];
+  // The ring follows the same OKLCH path as the gradients. OKLCH conversion is too heavy to run
+  // per frame inside a worklet, so sample it on the same grid as the gradient steps and just
+  // walk that table — the chord between neighbours is short enough to lerp straight through.
+  const ringSteps = useMemo(
+    () =>
+      Array.from({ length: TRANSITION_STEPS }, (_, i) =>
+        mixOklch(glowRGBA[transitionFrom], glowRGBA[transitionTo], i / (TRANSITION_STEPS - 1)),
+      ),
+    [transitionFrom, transitionTo],
+  );
   const ringProps = useAnimatedProps(() => {
-    const t = progress.value / (TRANSITION_STEPS - 1);
-    const r = ringFromGlow[0] + (ringToGlow[0] - ringFromGlow[0]) * t;
-    const g = ringFromGlow[1] + (ringToGlow[1] - ringFromGlow[1]) * t;
-    const b = ringFromGlow[2] + (ringToGlow[2] - ringFromGlow[2]) * t;
-    const a = ringFromGlow[3] + (ringToGlow[3] - ringFromGlow[3]) * t;
-    return { stroke: `rgba(${r}, ${g}, ${b}, ${a})` };
+    const p = Math.max(0, Math.min(TRANSITION_STEPS - 1, progress.value));
+    const i0 = Math.floor(p);
+    const i1 = Math.min(i0 + 1, TRANSITION_STEPS - 1);
+    const f = p - i0;
+    const a = ringSteps[i0];
+    const b = ringSteps[i1];
+    return {
+      stroke: `rgba(${a[0] + (b[0] - a[0]) * f}, ${a[1] + (b[1] - a[1]) * f}, ${
+        a[2] + (b[2] - a[2]) * f
+      }, ${a[3] + (b[3] - a[3]) * f})`,
+    };
   });
 
   const { main: mainLooks, glow: glowLooks, core: coreLooks } = useMemo(

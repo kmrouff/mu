@@ -1,6 +1,6 @@
-<img src="docs/screen-1.png" width="300">
-
 # mu
+
+<img src="docs/orb-demo.gif" width="300" alt="The orb shifting from idle, to Biala thinking of you, to both at once">
 
 mu is a small app for staying in touch without really talking. Each person you connect with gets one orb. Press and hold it when you are thinking of them, and they see a soft glow the next time they open the app. If you are both pressing at once, the orb shifts into a shared state with a light haptic pulse. No feed, no chat, no notifications pulling you back in.
 

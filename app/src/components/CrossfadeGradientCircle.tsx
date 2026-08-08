@@ -15,11 +15,22 @@ export type GradientLook = { id: string; stops: GradientStop[] };
 
 function weight(progress: number, index: number, count: number, wrap: boolean) {
   'worklet';
-  let d = Math.abs(progress - index);
   if (wrap) {
-    d = Math.min(d, count - d);
+    // Cyclic sweep (the login orb's endless hue cycle): symmetric tent weights, since there's
+    // no fixed "first" layer that can stay opaque underneath the rest.
+    const d = Math.min(Math.abs(progress - index), count - Math.abs(progress - index));
+    return Math.max(0, 1 - d);
   }
-  return Math.max(0, 1 - d);
+  // One-directional sweep (state transitions). Every layer at or below `progress` is held fully
+  // opaque and only the leading edge fades in on top of them.
+  //
+  // The obvious alternative — symmetric tent weights on both layers — silently breaks: two
+  // half-transparent circles composited over each other only cover 1-(1-0.5)^2 = 75% of the
+  // pixel, so the page background bleeds through at every half-step. Across N steps that's N-1
+  // periodic dips in opacity, i.e. a visible strobe during the transition, plus a washed-out
+  // colour because the background is mixing in. Keeping the stack opaque underneath makes
+  // coverage exactly 1.0 for the whole sweep and the blend a true two-colour lerp.
+  return Math.max(0, Math.min(1, progress - index + 1));
 }
 
 function LayerCircle({
