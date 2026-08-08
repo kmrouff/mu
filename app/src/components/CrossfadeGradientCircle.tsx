@@ -15,22 +15,25 @@ export type GradientLook = { id: string; stops: GradientStop[] };
 
 function weight(progress: number, index: number, count: number, wrap: boolean) {
   'worklet';
+  // Settled on a single look: show it, wherever `progress` happens to have been left parked.
+  if (count === 1) return 1;
   if (wrap) {
     // Cyclic sweep (the login orb's endless hue cycle): symmetric tent weights, since there's
     // no fixed "first" layer that can stay opaque underneath the rest.
     const d = Math.min(Math.abs(progress - index), count - Math.abs(progress - index));
     return Math.max(0, 1 - d);
   }
-  // One-directional sweep (state transitions). Every layer at or below `progress` is held fully
-  // opaque and only the leading edge fades in on top of them.
-  //
-  // The obvious alternative — symmetric tent weights on both layers — silently breaks: two
-  // half-transparent circles composited over each other only cover 1-(1-0.5)^2 = 75% of the
-  // pixel, so the page background bleeds through at every half-step. Across N steps that's N-1
-  // periodic dips in opacity, i.e. a visible strobe during the transition, plus a washed-out
-  // colour because the background is mixing in. Keeping the stack opaque underneath makes
-  // coverage exactly 1.0 for the whole sweep and the blend a true two-colour lerp.
-  return Math.max(0, Math.min(1, progress - index + 1));
+  // One-directional sweep (state transitions): show exactly one look at a time and step through
+  // them. These gradients fade to transparent at their rim, and *any* scheme that leaves two of
+  // them visible at once composites those rims together — which distorts the orb's alpha:
+  //   - fading both (symmetric tent) thins the middle to 1-(1-0.5)^2 = 75% coverage, so the page
+  //     shows through and the colour washes out, once per step — a strobe;
+  //   - holding the lower ones opaque instead compounds the rim the other way, 1-(1-a)^n, which
+  //     hardens the soft edge into a defined disc.
+  // Exactly one visible layer is the only arrangement that reproduces a single gradient's alpha
+  // exactly, so the rim is identical at rest and mid-sweep. The colour then advances in discrete
+  // hops, which is why the caller supplies enough looks that each hop lands within a frame or two.
+  return Math.round(progress) === index ? 1 : 0;
 }
 
 function LayerCircle({

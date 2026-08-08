@@ -295,6 +295,13 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: colors.textSecondary2,
     letterSpacing: 0.1,
+    // Pin the line's height so the block above it never moves. The component always renders a
+    // space when there's nothing to say, which reserves the line on native — but on web that
+    // lone space is collapsed away per normal HTML whitespace handling, the line box goes to
+    // zero, and the vertically-centred orb and name jump up by half a line as a message
+    // appears. An explicit height holds the space open on both.
+    lineHeight: 16,
+    minHeight: 16,
   },
   name: {
     fontSize: type.contactName,

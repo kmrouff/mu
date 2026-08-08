@@ -8,6 +8,7 @@ import { registerUser, pingContact, setPressingFor, subscribeToPressingFor, subs
 import { createConnectCode, redeemConnectCode, subscribeToContacts, RemoteContact } from '../firebase/pairing';
 
 const WELCOME_SEEN_KEY = 'mu.hasSeenWelcome';
+const LAST_SEEN_KEY = 'mu.lastSeenAt';
 
 // Pulls a connect code out of an incoming deep link. Supports both `mu://connect/XXXXXX` and
 // `mu://connect?code=XXXXXX` (and Expo Go's `exp://host/--/connect/XXXXXX` dev-mode wrapping —
@@ -73,6 +74,36 @@ export function useMuState() {
   useEffect(() => {
     AsyncStorage.getItem(WELCOME_SEEN_KEY).then((v) => setHasSeenWelcome(v === 'true'));
   }, []);
+
+  // Pings live on the server, but "I've already looked at this one" is purely local. Without
+  // persisting it, every reload compares against an empty record and every ping you've already
+  // read comes back as unread.
+  useEffect(() => {
+    AsyncStorage.getItem(LAST_SEEN_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        const saved = JSON.parse(raw) as Record<string, number>;
+        // Anything marked seen during this session was seen more recently than the stored copy.
+        setLastSeenAt((current) => ({ ...saved, ...current }));
+      } catch {
+        // corrupt entry — not worth surfacing, it just means one stale badge
+      }
+    });
+  }, []);
+
+  // Whatever you're currently looking at counts as read, including pings that land while you
+  // sit on it. Bails out when it's already marked so this can't loop on its own update.
+  useEffect(() => {
+    if (!selectedId) return;
+    const ping = lastPingAt[selectedId];
+    if (ping == null) return;
+    setLastSeenAt((current) => {
+      if ((current[selectedId] ?? 0) >= ping) return current;
+      const next = { ...current, [selectedId]: Math.max(Date.now(), ping) };
+      AsyncStorage.setItem(LAST_SEEN_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, [selectedId, lastPingAt]);
 
   // Catch an invite code from a deep link — whether the app was launched fresh via the link
   // (cold start) or was already open when the link was tapped (warm start).
@@ -169,7 +200,11 @@ export function useMuState() {
 
     selectContact: (id: string) => {
       setSelectedId(id);
-      setLastSeenAt((s) => ({ ...s, [id]: Date.now() }));
+      setLastSeenAt((s) => {
+        const next = { ...s, [id]: Date.now() };
+        AsyncStorage.setItem(LAST_SEEN_KEY, JSON.stringify(next)).catch(() => {});
+        return next;
+      });
     },
     handlePress: () => {
       setYouPressing(true);
