@@ -32,11 +32,13 @@ const PING_MESSAGE_VISIBLE_MS = 4000;
 function PresenceMessage({
   name,
   isLive,
+  isSending,
   isBoth,
   pingAt,
 }: {
   name: string;
   isLive: boolean;
+  isSending: boolean;
   isBoth: boolean;
   pingAt?: number;
 }) {
@@ -45,7 +47,7 @@ function PresenceMessage({
 
   useEffect(() => {
     cancelAnimation(pulse);
-    if (isBoth || isLive) {
+    if (isBoth || isLive || isSending) {
       pulse.value = 1;
       opacity.value = withTiming(1, { duration: 300, easing: Easing.inOut(Easing.ease) });
       // Gentle continuous pulse while the ping is actually live — distinguishes "right now"
@@ -65,7 +67,7 @@ function PresenceMessage({
     }
 
     opacity.value = withTiming(0, { duration: 200 });
-  }, [isBoth, isLive, pingAt]);
+  }, [isBoth, isLive, isSending, pingAt]);
 
   const style = useAnimatedStyle(() => ({
     opacity: opacity.value * pulse.value,
@@ -74,13 +76,17 @@ function PresenceMessage({
   // Always render the line (even empty) so its height is reserved whether or not there's
   // anything to show — otherwise the orb above visibly shifts up/down as this text
   // appears/disappears, since it sits inside a vertically-centered flex column.
+  // Order matters: a mutual press outranks either side on its own, and anything happening right
+  // now outranks the past-tense line.
   const text = isBoth
     ? "You're synced"
-    : isLive
-      ? `${name} is thinking of you`
-      : pingAt != null
-        ? `${name} thought of you ${formatRelativePing(pingAt, Date.now())}`
-        : ' ';
+    : isSending
+      ? `You're thinking of ${name}`
+      : isLive
+        ? `${name} is thinking of you`
+        : pingAt != null
+          ? `${name} thought of you ${formatRelativePing(pingAt, Date.now())}`
+          : ' ';
 
   return (
     <Animated.Text style={[styles.pingLabel, style]} numberOfLines={1}>
@@ -197,6 +203,7 @@ export function HomeScreen({
                 key={selectedContact.id}
                 name={selectedContact.name}
                 isLive={!!theirActive[selectedContact.id]}
+                isSending={youPressing}
                 isBoth={both}
                 pingAt={lastPingAt[selectedContact.id]}
               />

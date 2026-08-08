@@ -17,8 +17,16 @@ export function formatRelativePing(pingAt: number, now: number): string {
   const dayDiff = Math.round((startOfDay(nowDate) - startOfDay(ping)) / 86_400_000);
   const hour = ping.getHours();
 
+  // Time-of-day buckets are the wrong tool for something that just happened: a ping sent
+  // seconds ago at half past midnight is technically in the small hours, but calling it
+  // "last night" is plainly wrong. This is also the most common case in an app built around
+  // presence, since the message appears the moment someone stops pressing.
+  if (now - pingAt < 2 * 60_000) return 'just now';
+
   if (dayDiff <= 0) {
-    if (hour < 5) return 'last night';
+    // Only reach back for "last night" once the night is actually over — otherwise it's still
+    // tonight for both of us.
+    if (hour < 5) return nowDate.getHours() < 5 ? 'earlier tonight' : 'last night';
     if (hour < 12) return 'this morning';
     return 'today';
   }
