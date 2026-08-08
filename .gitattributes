@@ -1,0 +1,4 @@
+# The design handoff is reference material, not part of the app. Without this its generated
+# runtime and prototype HTML dominate the language breakdown and the repo reads as a
+# JavaScript/HTML project rather than the TypeScript one it is.
+design/** linguist-vendored
