@@ -78,7 +78,9 @@ export const orbSizes = {
 export const motion = {
   breatheMs: 4200,
   pulseMs: 1050,
-  heartbeatMs: 1050,
+  // One full lub-dub of the mutual state. Drives both the orb's scale sequence and the haptic
+  // buzz, so they stay in step — keep them reading from this rather than repeating the number.
+  heartbeatMs: 1450,
   driftMs: 6000,
   hueCycleMs: 10000,
   crossFadeMs: 600,

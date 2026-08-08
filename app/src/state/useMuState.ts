@@ -6,6 +6,7 @@ import * as Linking from 'expo-linking';
 import { useIdentity } from '../identity/useIdentity';
 import { registerUser, pingContact, setPressingFor, subscribeToPressingFor, subscribeToReceivedPings } from '../firebase/presence';
 import { createConnectCode, redeemConnectCode, subscribeToContacts, RemoteContact } from '../firebase/pairing';
+import { motion } from '../theme/tokens';
 
 const WELCOME_SEEN_KEY = 'mu.hasSeenWelcome';
 const LAST_SEEN_KEY = 'mu.lastSeenAt';
@@ -32,9 +33,10 @@ function extractInviteCode(url: string): string | null {
 export type Contact = { id: string; name: string };
 export type InfoScreen = 'mission' | 'contact' | 'faq' | 'terms' | null;
 
-// README "both" haptic spec: navigator.vibrate([45,65,45,260]) repeating every 1.05s.
-// expo-haptics has no raw vibration-pattern API, so we approximate the buzz-buzz-pause
-// feel with two quick impacts per 1.05s tick instead of a literal pattern replay.
+// README "both" haptic spec: a repeating buzz-buzz-pause. expo-haptics has no raw
+// vibration-pattern API, so this approximates it with two quick impacts per tick. The tick
+// interval comes from motion.heartbeatMs, the same token driving the orb's scale sequence, so
+// the buzz you feel lines up with the beat you see.
 async function vibrateOnce() {
   if (Platform.OS === 'web') return;
   try {
@@ -172,7 +174,7 @@ export function useMuState() {
   useEffect(() => {
     if (both && !wasBoth.current) {
       vibrateOnce();
-      heartbeatInterval.current = setInterval(vibrateOnce, 1050);
+      heartbeatInterval.current = setInterval(vibrateOnce, motion.heartbeatMs);
     } else if (!both && wasBoth.current) {
       clearInterval(heartbeatInterval.current);
     }

@@ -62,29 +62,34 @@ function oklabToRgb(L: number, a: number, b: number): [number, number, number] {
   ];
 }
 
-/** Interpolate two colours through OKLCH, taking the shorter way around the hue wheel. */
+// How much to raise lightness at the midpoint of a sweep. Tuned by eye against the orb on its
+// cream background: enough that the crossing reads as the orb brightening, not as it going drab,
+// while staying clearly darker than the page so it never dissolves into the background.
+const MID_LIFT = 0.035;
+
+/**
+ * Interpolate two colours in a straight line through Oklab, brightening slightly at the midpoint.
+ *
+ * The tempting alternative is to rotate hue around the colour wheel, which keeps chroma up the
+ * whole way. Don't: the orb's states sit far apart in hue (idle and sending are ~198 degrees
+ * apart), so that route travels through entirely different colours — blue reaches yellow via a
+ * vivid cyan, and red reaches blue via magenta and violet. Worse, lerping chroma across the arc
+ * leaves the midpoint *more* saturated than either endpoint, so those detours don't read as a
+ * transition at all, they read as the orb turning a new colour.
+ *
+ * A straight line has no such detour, but it does pass near the neutral axis, which on its own
+ * looks drab. Lifting lightness over the crossing turns that into a brief pale glow instead —
+ * which suits an orb whose whole visual language is light.
+ */
 export function mixOklch(from: RGBA, to: RGBA, t: number): RGBA {
   const [L1, a1, b1] = rgbToOklab(from[0], from[1], from[2]);
   const [L2, a2, b2] = rgbToOklab(to[0], to[1], to[2]);
 
-  const C1 = Math.hypot(a1, b1);
-  const C2 = Math.hypot(a2, b2);
-  let H1 = Math.atan2(b1, a1);
-  let H2 = Math.atan2(b2, a2);
+  const a = a1 + (a2 - a1) * t;
+  const b = b1 + (b2 - b1) * t;
+  // Peaks at t = 0.5 and vanishes at both ends, so the endpoints stay exactly on their tokens.
+  const L = L1 + (L2 - L1) * t + MID_LIFT * Math.sin(Math.PI * t);
 
-  // A greyish endpoint has no meaningful hue of its own — borrow the other end's so the
-  // sweep doesn't detour through an arbitrary direction on the way out of / into grey.
-  if (C1 < 1e-4) H1 = H2;
-  if (C2 < 1e-4) H2 = H1;
-
-  let dH = H2 - H1;
-  if (dH > Math.PI) dH -= 2 * Math.PI;
-  if (dH < -Math.PI) dH += 2 * Math.PI;
-
-  const L = L1 + (L2 - L1) * t;
-  const C = C1 + (C2 - C1) * t;
-  const H = H1 + dH * t;
-
-  const [r, g, b] = oklabToRgb(L, Math.cos(H) * C, Math.sin(H) * C);
-  return [r, g, b, from[3] + (to[3] - from[3]) * t];
+  const [r, g, bl] = oklabToRgb(L, a, b);
+  return [r, g, bl, from[3] + (to[3] - from[3]) * t];
 }

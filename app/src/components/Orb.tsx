@@ -35,8 +35,9 @@ const STATES: OrbState[] = ['idle', 'sending', 'receiving', 'both'];
 const TRANSITION_MS = 420;
 const TRANSITION_EASING = Easing.bezier(0.7, 0, 0.3, 1);
 
-// Long enough that a press grows in visibly rather than snapping to full size.
-const SIZE_EASE_MS = 300;
+// Long enough that a press visibly grows in on an S-curve rather than arriving at full size.
+const SIZE_EASE_MS = 520;
+const PRESS_SCALE = 1.08;
 
 // Sample points along the OKLCH path between the two state colours. Only one is ever shown at a
 // time (see CrossfadeGradientCircle) so the colour advances in hops rather than blending, which
@@ -144,21 +145,29 @@ export function Orb({ state, size, ring = false }: Props) {
         withRepeat(withTiming(1.014, { duration: motion.breatheMs / 2, easing: easeInOut }), -1, true),
       );
     } else if (state === 'sending' || state === 'receiving') {
-      // Grow into the elevated pulse baseline. This used to be a 140ms `back` ease, which
-      // overshoots and front-loads its movement, so the orb appeared to snap straight out to
-      // full size the instant you touched it — eased both ways over a longer beat instead.
+      // Grow into the elevated pulse baseline. Two things used to make this feel like a pop:
+      // a 140ms `back` ease (which overshoots and front-loads its movement), and a pulse that
+      // then swung all the way back down to 1.02 — a 6% excursion immediately after touch.
+      // Now it eases up over a longer beat and settles into a much shallower breath.
       scale.value = withSequence(
-        withTiming(1.08, { duration: SIZE_EASE_MS, easing: easeInOut }),
-        withRepeat(withTiming(1.02, { duration: motion.pulseMs / 2, easing: easeInOut }), -1, true),
+        withTiming(PRESS_SCALE, { duration: SIZE_EASE_MS, easing: easeInOut }),
+        withRepeat(
+          withTiming(PRESS_SCALE - 0.03, { duration: motion.pulseMs / 2, easing: easeInOut }),
+          -1,
+          true,
+        ),
       );
     } else {
+      // Lub-dub, then rest. Phases are fractions of `heartbeatMs` so the whole beat slows or
+      // quickens as one, and stays locked to the haptic buzz driven off the same token.
+      const hb = motion.heartbeatMs;
       scale.value = withRepeat(
         withSequence(
-          withTiming(1.065, { duration: 168, easing: easeInOut }),
-          withTiming(1.015, { duration: 168, easing: easeInOut }),
-          withTiming(1.06, { duration: 147, easing: easeInOut }),
-          withTiming(1, { duration: 252, easing: easeInOut }),
-          withTiming(1, { duration: 315, easing: easeInOut }),
+          withTiming(1.065, { duration: hb * 0.16, easing: easeInOut }),
+          withTiming(1.015, { duration: hb * 0.16, easing: easeInOut }),
+          withTiming(1.06, { duration: hb * 0.14, easing: easeInOut }),
+          withTiming(1, { duration: hb * 0.24, easing: easeInOut }),
+          withTiming(1, { duration: hb * 0.3, easing: easeInOut }),
         ),
         -1,
       );
