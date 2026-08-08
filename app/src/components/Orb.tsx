@@ -20,7 +20,23 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const STATES: OrbState[] = ['idle', 'sending', 'receiving', 'both'];
 
-const TRANSITION_MS = 800;
+// Colour and size are driven by two independent animations, which is what lets them run at
+// different speeds. The size keeps the slow, gentle feel; the colour crosses quickly.
+//
+// Blue and yellow sit ~198 degrees apart in hue, i.e. nearly opposite, and the orb reads against
+// a near-white page by its *chroma* rather than its lightness (idle sits at L 0.87 against a
+// background around 0.96). So any path that drops chroma — a straight line through the middle of
+// the colour space, or a cross-dissolve — washes the orb out into the background, which is the
+// grey flash this all started with. Holding chroma up necessarily means travelling around the
+// hue wheel, and there's no way around that; the intermediate hues have to exist. What we can
+// control is how long they're on screen, so the sweep is short and heavily eased at both ends:
+// it lingers on the state colours and crosses the middle quickly, reading as blue-to-yellow
+// rather than a tour through green.
+const TRANSITION_MS = 420;
+const TRANSITION_EASING = Easing.bezier(0.7, 0, 0.3, 1);
+
+// Long enough that a press grows in visibly rather than snapping to full size.
+const SIZE_EASE_MS = 300;
 
 // Sample points along the OKLCH path between the two state colours. Only one is ever shown at a
 // time (see CrossfadeGradientCircle) so the colour advances in hops rather than blending, which
@@ -107,7 +123,7 @@ export function Orb({ state, size, ring = false }: Props) {
     progress.value = 0;
     progress.value = withTiming(
       steps - 1,
-      { duration: TRANSITION_MS, easing: Easing.inOut(Easing.ease) },
+      { duration: TRANSITION_MS, easing: TRANSITION_EASING },
       (finished) => {
         if (finished) runOnJS(settle)(state);
       },
@@ -121,17 +137,18 @@ export function Orb({ state, size, ring = false }: Props) {
     cancelAnimation(scale);
     const easeInOut = Easing.inOut(Easing.ease);
     if (state === 'idle') {
-      scale.value = 1;
-      scale.value = withRepeat(
-        withTiming(1.014, { duration: motion.breatheMs / 2, easing: easeInOut }),
-        -1,
-        true,
+      // Ease back down to the resting size before picking the breathing loop back up. Assigning
+      // 1 outright would teleport the orb back from whatever size the press had grown it to.
+      scale.value = withSequence(
+        withTiming(1, { duration: SIZE_EASE_MS, easing: easeInOut }),
+        withRepeat(withTiming(1.014, { duration: motion.breatheMs / 2, easing: easeInOut }), -1, true),
       );
     } else if (state === 'sending' || state === 'receiving') {
-      // Quick snap up on entry (more noticeable than easing straight into the loop),
-      // then a bigger, elevated-baseline pulse — grows and stays grown, not just breathing.
+      // Grow into the elevated pulse baseline. This used to be a 140ms `back` ease, which
+      // overshoots and front-loads its movement, so the orb appeared to snap straight out to
+      // full size the instant you touched it — eased both ways over a longer beat instead.
       scale.value = withSequence(
-        withTiming(1.1, { duration: 140, easing: Easing.out(Easing.back(1.4)) }),
+        withTiming(1.08, { duration: SIZE_EASE_MS, easing: easeInOut }),
         withRepeat(withTiming(1.02, { duration: motion.pulseMs / 2, easing: easeInOut }), -1, true),
       );
     } else {
